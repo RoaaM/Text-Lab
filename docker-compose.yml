@@ -1,0 +1,97 @@
+version: '3.7'
+
+services:
+  db:
+    image: postgres:12.0-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=db_admin
+      - POSTGRES_PASSWORD=010202020aA##
+      - POSTGRES_DB=nameDB
+
+  backend:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./docker/backend/Dockerfile
+    entrypoint: /app/docker/backend/wsgi-entrypoint.sh
+    volumes:
+      - static_volume:/app/backend/django_static
+      - static_image:/app/backend/media
+    expose:
+      - 8000
+    environment:
+      - SECRET_KEY=django-insecure-z!6*wk6)y__0np6v2(c^vub$atyau$x%xrnho8svxr#qhot)oh
+      - PROTOCOL=https
+      - DOMAIN=alsharakagroup.com
+      - POSTGRES_DB=nameDB
+      - POSTGRES_USER=db_admin
+      - POSTGRES_PASSWORD=010202020aA##
+    depends_on:
+      - db
+    links:
+      - db
+
+
+  nextjs:
+    build:
+      context: .
+      dockerfile: ./docker/nextjs/Dockerfile
+    expose:
+      - 3000
+
+  nginx:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./docker/nginx/Dockerfile
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - static_volume:/app/backend/django_static
+      - static_image:/app/backend/media
+      - ./docker/nginx/certbot/conf:/etc/letsencrypt
+      - ./docker/nginx/certbot/www:/var/www/certbot
+
+    depends_on:
+      - nextjs
+      - backend
+      
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/certbot/conf:/etc/letsencrypt
+      - ./docker/nginx/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    
+  # pgbackups:
+  #   container_name: Backup
+  #   image: prodrigestivill/postgres-backup-local
+  #   restart: always
+  #   volumes:
+  #     - ./backup:/backups
+  #   links:
+  #     - db:db
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     - POSTGRES_HOST=db
+  #       - POSTGRES_USER=db_admin
+  #     - POSTGRES_PASSWORD=010202020aA##
+  #     - POSTGRES_DB=nameDB
+
+  #     - POSTGRES_EXTRA_OPTS=-Z9 --schema=public --blobs
+  #     - SCHEDULE=@every 24h0m00s
+  #     - BACKUP_KEEP_DAYS=7
+  #     - BACKUP_KEEP_WEEKS=4
+  #     - BACKUP_KEEP_MONTHS=6
+  #     - HEALTHCHECK_PORT=81
+
+
+volumes:
+  static_volume: {}
+  static_image: {}
+  postgres_data:
